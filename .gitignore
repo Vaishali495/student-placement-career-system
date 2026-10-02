@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+screens_by_stich_ai
 *.local
 
 # Editor directories and files
