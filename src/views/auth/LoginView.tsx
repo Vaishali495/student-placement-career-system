@@ -1,23 +1,60 @@
+import React, { useState } from "react";
 import Header from "../../components/Header";
 import LockIcon from "../../assets/lock-icon.png";
-import { useState } from "react";
 import PlaceCraftLogo from "../../assets/PlaceCraft-logo.png";
 import Graduatelogo from "../../assets/graduate.png";
 import GirlImage from "../../assets/girl-image.jpg";
 import VerifiedIcon from "../../assets/verified-icon.png";
+import { Link } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 const LOGIN_ITEMS = [
   { id: "student", label: "Candidate Login" },
-  { id: "recriter", label: "TPO / RecruiterLogin" },
+  { id: "recruiter", label: "TPO / RecruiterLogin" },
 ];
 
 const LoginView = () => {
   const [activeTab, setActiveTab] = useState<string>("student");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // 1. Form state management
+  const [formData, setFormData] = useState({
+    identifier: "",
+    password: "",
+  });
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    setFormData({ identifier: "", password: "" }); // Reset inputs on tab change
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Submit handler for authentication API
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // API call here
+      console.log("Submitting Payload:", { role: activeTab, ...formData });
+
+      // Example redirection after login success:
+      // navigate(activeTab === "student" ? "/student/dashboard" : "/tpo/dashboard");
+    } catch (error) {
+      console.error("Login failed", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
       <Header />
-      <div className="flex justify-center w-full bg-[#f8f9ff] px-8 py-6 gap-10">
+      <div className="flex justify-center w-full bg-[#f8f9ff] px-8 py-6 gap-10 min-h-[calc(100vh-80px)]">
         {/* Left side Information */}
         <div className="w-[40%] flex flex-col gap-3 items-start">
           <div className="flex items-center gap-1">
@@ -41,20 +78,6 @@ const LoginView = () => {
                 students and corporate partners.
               </p>
             </div>
-            {/* <div className="flex gap-2 items-center w-full tracking-wide">
-              <div className="bg-white pl-2 pr-10 py-2.5 rounded-lg shadow">
-                <p className="text-3xl text-blue-800 font-bold">94.8%</p>
-                <p className="text-xs text-gray-800">Placement Rate</p>
-              </div>
-              <div className="bg-white pl-2 pr-10 py-2.5 rounded-lg">
-                <p className="text-3xl text-green-800 font-bold">350+</p>
-                <p className="text-xs text-gray-800">Tier-1 Recruiter</p>
-              </div>
-              <div className="bg-white pl-2 pr-10 py-2.5 rounded-lg">
-                <p className="text-3xl font-bold">₹52 LPA</p>
-                <p className="text-xs text-gray-800">Highest CTC</p>
-              </div>
-            </div> */}
             <div className="grid grid-cols-3 gap-2 w-full">
               {/* Card 1 */}
               <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col justify-between min-w-0">
@@ -100,7 +123,7 @@ const LoginView = () => {
           </div>
         </div>
 
-        {/* Login Form */}
+        {/* Login Form Container */}
         <div className="w-[55%] flex flex-col gap-8 items-end">
           <div className="flex items-center gap-1 bg-[#dce9ff] w-fit rounded-xl px-4 py-0.5">
             <span className="inline-block bg-green-700 rounded-full w-2 h-2"></span>
@@ -115,7 +138,7 @@ const LoginView = () => {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => handleTabChange(item.id)}
                   className={`w-1/2 py-2.5 rounded-lg text-[15px] transition-all duration-200 flex items-center justify-center gap-2 font-semibold ${
                     activeTab === item.id
                       ? "text-[#1d4ed8] bg-white shadow-sm"
@@ -126,51 +149,80 @@ const LoginView = () => {
               ))}
             </div>
 
+            {/* Dynamic Heading based on Active Tab */}
             <div className="my-4">
-              <h1 className="text-xl font-bold">Student Portal Authentication</h1>
+              <h1 className="text-xl font-bold">{activeTab === "student" ? "Student Portal Authentication" : "TPO & Recruiter Authentication"}</h1>
               <p className="text-gray-600 text-sm">
-                Enter your institutional credentials to access your placement drives, assessments, and interview schedules.
+                {activeTab === "student"
+                  ? "Enter your institutional credentials to access your placement drives, assessments, and interview schedules."
+                  : "Enter your corporate or official cell credentials to manage placement drives, student verification, and drive slots."}
               </p>
             </div>
 
-            <div className="flex flex-col">
-              <label htmlFor="email" className="text-sm">
-                Campus RollNo. /Institutional Email <span className="text-red-700">*</span>
+            {/* Form Tag Wrapping Inputs */}
+            <form onSubmit={handleSubmit} className="flex flex-col">
+              <label htmlFor="identifier" className="text-sm font-medium text-gray-700">
+                {activeTab === "student" ? "Campus RollNo. /Institutional Email" : "Work Email"} <span className="text-red-700">*</span>
               </label>
               <input
                 type="text"
-                id="email"
-                name="email"
-                placeholder="2726160006/student@campus.edu"
-                className="block w-full bg-[#eff4ff] p-2.5 text-base rounded-lg"></input>
+                id="identifier"
+                name="identifier"
+                required
+                value={formData.identifier}
+                onChange={handleChange}
+                placeholder={activeTab === "student" ? "2726160006/student@campus.edu" : "recruiter@campus.edu"}
+                className="block w-full bg-[#eff4ff] p-2.5 text-base rounded-lg"
+              />
               <div className="flex justify-between items-center text-sm mt-4">
-                <label htmlFor="email">
+                <label htmlFor="password">
                   Secret Passcode / Password<span className="text-red-700">*</span>
                 </label>
-                <a href="#" className="text-[#4869d3] hover:underline">
+                <Link to="/forgot-password" className="text-[#4869d3] hover:underline">
                   Forgot password?
-                </a>
+                </Link>
               </div>
-              <input
-                type="text"
-                id="email"
-                name="email"
-                placeholder="•••••••••••••••"
-                className="block w-full bg-[#eff4ff] p-2.5 text-base rounded-lg placeholder:text-2xl placeholder:tracking-widest"></input>
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="•••••••••••••••"
+                  className="block w-full bg-[#eff4ff] p-2.5 text-base rounded-lg placeholder:text-2xl placeholder:tracking-widest"
+                />
+
+                {/* Toggle Eye Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer focus:outline-none">
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-gray-500" />
+                  )}
+                </button>
+              </div>
+
               <button
-                type="button"
+                type="submit"
+                disabled={loading}
                 className="bg-[#2563eb] p-2.5 rounded-lg text-white tracking-tighter text-base my-4 hover:cursor-pointer hover:bg-[#3a72eb] transition-all">
-                Sign In to Placement Portal
+                {loading ? "Authenticating..." : "Sign In to Placement Portal"}
               </button>
-            </div>
+            </form>
 
             <div className="flex justify-between items-center p-2 rounded-lg my-4 bg-[#eff4ff]">
               <p className="text-gray-700 text-sm">Don't have your portal account yet?</p>
-              <a href="#" className="text-[#4869d3] font-semibold tracking-tighter text-sm hover:underline">
-                Register as Student ⇨
-              </a>
+              <Link to={`/register?role=${activeTab}`} className="text-[#4869d3] font-semibold tracking-tighter text-sm hover:underline">
+                {activeTab === "student" ? " Register as Student ⇨" : " Register as Recruiter ⇨"}
+              </Link>
             </div>
-            {/* Security & Compliance Footer Note */}
+
             <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
               Official Campus Placement &amp; Training Cell authentication node. Access is logged with IP, device signature, and university seat
               credentials in adherence with University Placement Policy.

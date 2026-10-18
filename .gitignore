@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 screens_by_stich_ai
+temp
 *.local
 
 # Editor directories and files
