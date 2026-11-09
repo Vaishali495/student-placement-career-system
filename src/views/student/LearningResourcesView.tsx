@@ -1,23 +1,11 @@
 import React, { useState } from "react";
 import {
-  BookOpen,
   Terminal,
   Bookmark,
   Play,
-  CheckCircle2,
-  Clock,
-  Code2,
-  FileText,
-  Calendar,
-  ExternalLink,
-  Sparkles,
-  ArrowRight,
-  Download,
   Video,
-  Layers,
   ChevronRight,
   Check,
-  UserCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 

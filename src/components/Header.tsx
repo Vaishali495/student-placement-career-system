@@ -1,15 +1,37 @@
 import { useState } from "react";
 import PlaceCraftLogo from "../assets/PlaceCraft-logo.png";
 import VerifiedIcon from "../assets/verified-icon.png";
-import { Bell, ChevronRight, HelpCircle, KeyRound, Mail, MapPin, Phone, Search, ShieldAlert, UserCheck, X } from "lucide-react";
+import { Bell, ChevronRight, HelpCircle, KeyRound, LogOut, Mail, MapPin, Phone, Search, ShieldAlert, UserCheck, X } from "lucide-react";
+import { UserRole } from "../types/auth";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const Header = () => {
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   const toggleFaq = (index: number) => {
     setActiveFaq(activeFaq === index ? null : index);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  // Helper function to extract user initials (e.g. "Arjun Sharma" -> "AS")
+  const getInitials = (name?: string) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   const loginFaqs = [
@@ -35,18 +57,18 @@ const Header = () => {
 
   return (
     <>
-      <header className="w-full flex justify-between items-center bg-white shadow-sm px-6 py-2">
+      <header className="w-full h-16 flex justify-between items-center bg-white shadow-sm px-6">
         {/* Left Section: Logo & Badge */}
         <div className="flex items-center gap-4">
           <div className="w-36 flex items-center">
             <img className="w-full h-auto object-contain" src={PlaceCraftLogo} alt="PlaceCraft Logo" />
           </div>
 
-          {isLoggedIn ? (
+          {isAuthenticated ? (
             <div className="flex items-center gap-3">
               <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                2025-2026 PLACEMENT SESSION • ACTIVE
+                {user?.role === UserRole.STUDENT ? "2025-2026 PLACEMENT SESSION • ACTIVE" : "2025-2026 PLACEMENT SESSION • TPO Command Center"}
               </span>
             </div>
           ) : (
@@ -58,7 +80,7 @@ const Header = () => {
         </div>
 
         {/* Right Section: Buttons */}
-        {isLoggedIn ? (
+        {isAuthenticated ? (
           <div>
             {/* Search Bar & User Controls */}
             <div className="flex items-center gap-4">
@@ -77,14 +99,48 @@ const Header = () => {
               </button>
 
               {/* Profile Avatar */}
-              <div className="flex items-center gap-3 border-l pl-4 border-slate-200">
+              {/* <div className="flex items-center gap-3 border-l pl-4 border-slate-200">
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-semibold leading-tight">Arjun Sharma</p>
                   <p className="text-xs text-slate-500">CSE • Sem 7 | CGPA 8.84</p>
                 </div>
                 <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-sm">AS</div>
-              </div>
+              </div> */}
 
+              {/* Profile Menu Dropdown */}
+              <div className="relative border-l pl-4 border-slate-200">
+                <div className="flex items-center gap-3 cursor-pointer" onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}>
+                  <div className="text-right hidden sm:block">
+                    <p className="text-sm font-semibold leading-tight">{user?.name || "User Account"}</p>
+                    <p className="text-xs text-slate-500 capitalize">
+                      {user?.role === UserRole.STUDENT
+                        ? `${user.course || "Student"} ${user.rollNumber ? `• ${user.rollNumber}` : ""}`
+                        : `${user?.designation || "TPO Officer"} ${user?.organization ? `• ${user.organization}` : ""}`}
+                    </p>
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-sm select-none">
+                    {getInitials(user?.name)}
+                  </div>
+                </div>
+
+                {/* Profile Popup Menu */}
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-50">
+                    <div className="px-4 py-2 border-b border-slate-100 sm:hidden">
+                      <p className="text-sm font-semibold text-slate-800">{user?.name}</p>
+                      <p className="text-xs text-slate-500">{user?.email}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer">
+                      <LogOut className="w-4 h-4 text-red-600" />
+                      <span>Log Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : (

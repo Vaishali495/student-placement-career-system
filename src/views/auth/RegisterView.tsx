@@ -2,15 +2,19 @@ import React, { useState } from "react";
 import Header from "../../components/Header";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+import { registerStudentApi, registerTpoApi } from "../../services/authService";
+import axios from "axios";
+import { Course, UserRole } from "../../types/auth";
 
 const RegisterView = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const defaultRole = searchParams.get("role") || "student";
+  const defaultRole = searchParams.get("role") || UserRole.STUDENT;
   const [role, setRole] = useState<string>(defaultRole);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
 
   // Unified Form State
@@ -18,7 +22,7 @@ const RegisterView = () => {
     fullName: "",
     email: "",
     rollNo: "",
-    department: "",
+    course: "",
     organization: "",
     designation: "",
     password: "",
@@ -32,42 +36,63 @@ const RegisterView = () => {
     setFormData((prev) => ({
       ...prev,
       rollNo: "",
-      department: "",
+      course: "",
       organization: "",
       designation: "",
     }));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear all previous errors
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
-
     setLoading(true);
+    setFieldErrors({});
+
     try {
       // API call payload according to active role
       const payload = {
-        role,
-        fullName: formData.fullName,
+        name: formData.fullName,
         email: formData.email,
         password: formData.password,
-        ...(role === "student"
-          ? { rollNo: formData.rollNo, department: formData.department }
+        confirmPassword: formData.confirmPassword,
+        ...(role === UserRole.STUDENT
+          ? { rollNumber: formData.rollNo, course: formData.course }
           : { organization: formData.organization, designation: formData.designation }),
+        role,
       };
 
       console.log("Registration Payload:", payload);
-      // await registerUserApi(payload);
-      // navigate("/login");
+      const response = role === UserRole.STUDENT ? await registerStudentApi(payload) : await registerTpoApi(payload);
+
+      console.log("Registration successful:", response);
+
+      navigate("/verify-email-notice", { state: { email: formData.email } });
     } catch (error) {
       console.error("Registration error:", error);
+
+      if (axios.isAxiosError(error)) {
+        const apiErrors = error?.response?.data?.errors;
+        if (Array.isArray(apiErrors)) {
+          const errorMap: Record<string, string> = {};
+          apiErrors.forEach((err: { field: string; message: string }) => {
+            errorMap[err.field] = err.message;
+          });
+          setFieldErrors(errorMap);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -81,25 +106,25 @@ const RegisterView = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex items-center justify-center p-4 py-10">
         <div className="max-w-xl w-full bg-white rounded-xl shadow-md p-6 sm:p-8">
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">Create {role === "student" ? "Student" : "TPO / Recruiter"} Account</h2>
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">Create {role === UserRole.STUDENT ? "Student" : "TPO"} Account</h2>
 
           {/* Role Switcher Toggle */}
           <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
             <button
               type="button"
               className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${
-                role === "student" ? "bg-white shadow text-blue-600" : "text-gray-500 hover:text-gray-700 hover:cursor-pointer"
+                role === UserRole.STUDENT ? "bg-white shadow text-blue-600" : "text-gray-500 hover:text-gray-700 hover:cursor-pointer"
               }`}
-              onClick={() => handleRoleChange("student")}>
+              onClick={() => handleRoleChange(UserRole.STUDENT)}>
               Student
             </button>
             <button
               type="button"
               className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${
-                role === "recruiter" ? "bg-white shadow text-blue-600" : "text-gray-500 hover:text-gray-700 hover:cursor-pointer"
+                role === UserRole.TPO ? "bg-white shadow text-blue-600" : "text-gray-500 hover:text-gray-700 hover:cursor-pointer"
               }`}
-              onClick={() => handleRoleChange("recruiter")}>
-              TPO / Recruiter
+              onClick={() => handleRoleChange(UserRole.TPO)}>
+              TPO
             </button>
           </div>
 
@@ -119,11 +144,12 @@ const RegisterView = () => {
                 className="w-full mt-1 p-2 bg-gray-100 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
                 placeholder="Enter full name"
               />
+              {fieldErrors.name && <p className="text-xs text-red-500 mt-1">{fieldErrors.name}</p>}
             </div>
 
             <div>
               <label htmlFor="email" className="block text-xs font-semibold text-gray-600 uppercase">
-                {role === "student" ? "Institutional Email" : "Work Email"}
+                {role === UserRole.STUDENT ? "Institutional Email" : "Work Email"}
                 <span className="text-red-700 text-[13px]">*</span>
               </label>
               <input
@@ -134,12 +160,13 @@ const RegisterView = () => {
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full mt-1 p-2 bg-gray-100 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
-                placeholder={role === "student" ? "student@campus.edu" : "recruiter@company.com"}
+                placeholder={role === UserRole.STUDENT ? "student@campus.edu" : "tpo@company.com"}
               />
+              {fieldErrors.email && <p className="text-xs text-red-500 mt-1">{fieldErrors.email}</p>}
             </div>
 
             {/* Conditional Fields for Student */}
-            {role === "student" && (
+            {role === UserRole.STUDENT && (
               <>
                 <div>
                   <label htmlFor="rollNo" className="block text-xs font-semibold text-gray-600 uppercase">
@@ -155,31 +182,42 @@ const RegisterView = () => {
                     className="w-full mt-1 p-2 bg-gray-100 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
                     placeholder="e.g. 2726160006"
                   />
+
+                  {fieldErrors.rollNumber && <p className="text-xs text-red-500 mt-1">{fieldErrors.rollNumber}</p>}
                 </div>
                 <div>
-                  <label htmlFor="department" className="block text-xs font-semibold text-gray-600 uppercase">
-                    Department / Branch <span className="text-red-700 text-[13px]">*</span>
+                  <label htmlFor="course" className="block text-xs font-semibold text-gray-600 uppercase">
+                    Course <span className="text-red-700 text-[13px]">*</span>
                   </label>
-                  <input
-                    type="text"
-                    name="department"
-                    id="department"
+                  <select
+                    name="course"
+                    id="course"
                     required
+                    value={formData.course}
                     onChange={handleChange}
-                    value={formData.department}
-                    className="w-full mt-1 p-2 bg-gray-100 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
-                    placeholder="e.g. B.Tech CSE / MCA"
-                  />
+                    className={`w-full mt-1 p-2 bg-gray-100 rounded-md outline-none transition cursor-pointer text-gray-700 ${
+                      fieldErrors.course ? "border border-red-500 focus:ring-1 focus:ring-red-500" : "focus:ring-1 focus:ring-blue-500"
+                    }`}>
+                    <option value="" disabled>
+                      Select Course
+                    </option>
+                    {Object.values(Course).map((courseVal) => (
+                      <option key={courseVal} value={courseVal}>
+                        {courseVal}
+                      </option>
+                    ))}
+                  </select>
+                  {fieldErrors.course && <p className="text-xs text-red-500 mt-1">{fieldErrors.course}</p>}
                 </div>
               </>
             )}
 
-            {/* Conditional Fields for TPO / Recruiter */}
-            {role === "recruiter" && (
+            {/* Conditional Fields for TPO */}
+            {role === UserRole.TPO && (
               <>
                 <div>
                   <label htmlFor="organization" className="block text-xs font-semibold text-gray-600 uppercase">
-                    Organization / Company Name <span className="text-red-700 text-[13px]">*</span>
+                    Organization <span className="text-red-700 text-[13px]">*</span>
                   </label>
                   <input
                     type="text"
@@ -189,8 +227,9 @@ const RegisterView = () => {
                     value={formData.organization}
                     onChange={handleChange}
                     className="w-full mt-1 p-2 bg-gray-100 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
-                    placeholder="e.g. Microsoft / MMU Placement Cell"
+                    placeholder="e.g. MMU Placement Cell"
                   />
+                  {fieldErrors.organization && <p className="text-xs text-red-500 mt-1">{fieldErrors.organization}</p>}
                 </div>
                 <div>
                   <label htmlFor="designation" className="block text-xs font-semibold text-gray-600 uppercase">
@@ -204,8 +243,9 @@ const RegisterView = () => {
                     value={formData.designation}
                     onChange={handleChange}
                     className="w-full mt-1 p-2 bg-gray-100 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
-                    placeholder="e.g. HR Manager / TPO Officer"
+                    placeholder="e.g. TPO Officer"
                   />
+                  {fieldErrors.designation && <p className="text-xs text-red-500 mt-1">{fieldErrors.designation}</p>}
                 </div>
               </>
             )}
@@ -241,6 +281,7 @@ const RegisterView = () => {
                   )}
                 </button>
               </div>
+              {fieldErrors.password && <p className="text-xs text-red-500 mt-1">{fieldErrors.password}</p>}
             </div>
 
             {/* Confirm Password Fields */}
@@ -274,19 +315,20 @@ const RegisterView = () => {
                   )}
                 </button>
               </div>
+              {fieldErrors.confirmPassword && <p className="text-xs text-red-500 mt-1">{fieldErrors.confirmPassword}</p>}
             </div>
 
             <button
               type="submit"
               disabled={loading}
               className="w-full py-3 bg-[#4869d3] text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 hover:cursor-pointer mt-2">
-              {loading ? "Creating Account..." : "Complete Registration"}
+              {loading ? "Registering..." : "Complete Registration"}
             </button>
           </form>
 
           {/* Login Redirection Link */}
           <div className="flex justify-center items-center gap-1.5 mt-6 text-sm text-gray-600">
-            <span>Already have an account?</span>
+            <span>Already have an account? </span>
             <Link to="/login" className="text-[#4869d3] font-semibold hover:underline">
               Sign In
             </Link>

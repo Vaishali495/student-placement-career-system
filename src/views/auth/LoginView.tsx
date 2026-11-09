@@ -5,18 +5,24 @@ import PlaceCraftLogo from "../../assets/PlaceCraft-logo.png";
 import Graduatelogo from "../../assets/graduate.png";
 import GirlImage from "../../assets/girl-image.jpg";
 import VerifiedIcon from "../../assets/verified-icon.png";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+import { loginApi } from "../../services/authService";
+import { useAuth } from "../../context/AuthContext";
+import { UserRole } from "../../types/auth";
 
 const LOGIN_ITEMS = [
-  { id: "student", label: "Candidate Login" },
-  { id: "recruiter", label: "TPO / RecruiterLogin" },
+  { id: UserRole.STUDENT, label: "Candidate Login" },
+  { id: UserRole.TPO, label: "TPO Login" },
 ];
 
 const LoginView = () => {
-  const [activeTab, setActiveTab] = useState<string>("student");
-  const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const [activeTab, setActiveTab] = useState<string>(UserRole.STUDENT);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // 1. Form state management
   const [formData, setFormData] = useState({
@@ -26,6 +32,7 @@ const LoginView = () => {
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
+    setError(null);
     setFormData({ identifier: "", password: "" }); // Reset inputs on tab change
   };
 
@@ -37,15 +44,24 @@ const LoginView = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       // API call here
-      console.log("Submitting Payload:", { role: activeTab, ...formData });
+      const payload = {
+        activeTab,
+        ...formData,
+      };
+      console.log("Submitting Payload:", payload);
+      const response = await loginApi(payload);
+      console.log("Login Response: ", response);
 
-      // Example redirection after login success:
-      // navigate(activeTab === "student" ? "/student/dashboard" : "/tpo/dashboard");
-    } catch (error) {
+      login(response.data.token, response.data.user);
+
+      navigate(response.data.user.role === UserRole.STUDENT ? "/student/dashboard" : "/tpo/dashboard");
+    } catch (error: any) {
       console.error("Login failed", error);
+      setError(error.response?.data?.message || "Invalid credentials. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -151,18 +167,20 @@ const LoginView = () => {
 
             {/* Dynamic Heading based on Active Tab */}
             <div className="my-4">
-              <h1 className="text-xl font-bold">{activeTab === "student" ? "Student Portal Authentication" : "TPO & Recruiter Authentication"}</h1>
+              <h1 className="text-xl font-bold">{activeTab === UserRole.STUDENT ? "Student Portal Authentication" : "TPO & Recruiter Authentication"}</h1>
               <p className="text-gray-600 text-sm">
-                {activeTab === "student"
+                {activeTab === UserRole.STUDENT
                   ? "Enter your institutional credentials to access your placement drives, assessments, and interview schedules."
                   : "Enter your corporate or official cell credentials to manage placement drives, student verification, and drive slots."}
               </p>
             </div>
 
+            {error && <div className="p-3 mb-4 text-xs font-semibold rounded-lg bg-red-50 text-red-700">{error}</div>}
+
             {/* Form Tag Wrapping Inputs */}
             <form onSubmit={handleSubmit} className="flex flex-col">
               <label htmlFor="identifier" className="text-sm font-medium text-gray-700">
-                {activeTab === "student" ? "Campus RollNo. /Institutional Email" : "Work Email"} <span className="text-red-700">*</span>
+                {activeTab === UserRole.STUDENT ? "Campus RollNo. /Institutional Email" : "Work Email"} <span className="text-red-700">*</span>
               </label>
               <input
                 type="text"
@@ -171,7 +189,7 @@ const LoginView = () => {
                 required
                 value={formData.identifier}
                 onChange={handleChange}
-                placeholder={activeTab === "student" ? "2726160006/student@campus.edu" : "recruiter@campus.edu"}
+                placeholder={activeTab === UserRole.STUDENT ? "2726160006/student@campus.edu" : "tpo@campus.edu"}
                 className="block w-full bg-[#eff4ff] p-2.5 text-base rounded-lg"
               />
               <div className="flex justify-between items-center text-sm mt-4">
@@ -200,11 +218,7 @@ const LoginView = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer focus:outline-none">
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4 text-gray-500" />
-                  ) : (
-                    <Eye className="w-4 h-4 text-gray-500" />
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4 text-gray-500" /> : <Eye className="w-4 h-4 text-gray-500" />}
                 </button>
               </div>
 
@@ -219,7 +233,7 @@ const LoginView = () => {
             <div className="flex justify-between items-center p-2 rounded-lg my-4 bg-[#eff4ff]">
               <p className="text-gray-700 text-sm">Don't have your portal account yet?</p>
               <Link to={`/register?role=${activeTab}`} className="text-[#4869d3] font-semibold tracking-tighter text-sm hover:underline">
-                {activeTab === "student" ? " Register as Student ⇨" : " Register as Recruiter ⇨"}
+                {activeTab === UserRole.STUDENT ? " Register as Student ⇨" : " Register as TPO ⇨"}
               </Link>
             </div>
 
