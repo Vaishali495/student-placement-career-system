@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Briefcase, FileText, GraduationCap, LayoutDashboard, Menu, PlusCircle, User, Users } from "lucide-react";
-import { UserRole } from "../types/auth";
+import { UserRole } from "../utils/enums";
 
 // Navigation Items Array inside Sidebar Component
 const STUDENT_NAV_ITEMS = [

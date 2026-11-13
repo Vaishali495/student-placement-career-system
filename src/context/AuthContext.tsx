@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import api from "../services/api";
-import type { UserRole } from "../types/auth";
+import type { UserRole } from "../utils/enums";
 
 export interface User {
   id: string;
@@ -57,11 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("user");
   };
 
-  return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, logout }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

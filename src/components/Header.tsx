@@ -2,9 +2,9 @@ import { useState } from "react";
 import PlaceCraftLogo from "../assets/PlaceCraft-logo.png";
 import VerifiedIcon from "../assets/verified-icon.png";
 import { Bell, ChevronRight, HelpCircle, KeyRound, LogOut, Mail, MapPin, Phone, Search, ShieldAlert, UserCheck, X } from "lucide-react";
-import { UserRole } from "../types/auth";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { UserRole } from "../utils/enums";
 
 const Header = () => {
   const { user, isAuthenticated, logout } = useAuth();

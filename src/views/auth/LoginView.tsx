@@ -9,7 +9,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { loginApi } from "../../services/authService";
 import { useAuth } from "../../context/AuthContext";
-import { UserRole } from "../../types/auth";
+import { UserRole } from "../../utils/enums";
 
 const LOGIN_ITEMS = [
   { id: UserRole.STUDENT, label: "Candidate Login" },

@@ -4,7 +4,7 @@ import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { registerStudentApi, registerTpoApi } from "../../services/authService";
 import axios from "axios";
-import { Course, UserRole } from "../../types/auth";
+import { Course, UserRole } from "../../utils/enums";
 
 const RegisterView = () => {
   const [searchParams, setSearchParams] = useSearchParams();

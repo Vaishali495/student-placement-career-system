@@ -1,7 +1,6 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
-import { UserRole } from "../types/auth";
 
 // Student Views
 import DashboardView from "../views/student/DashboardView";
@@ -15,7 +14,6 @@ import LoginView from "../views/auth/LoginView";
 import RegisterView from "../views/auth/RegisterView";
 import VerifyEmailNotice from "../views/auth/VerifyEmailNotice";
 import VerifyEmailView from "../views/auth/VerifyEmailView";
-import DashboardLayout from "../components/DashboardLayout";
 import MyApplicationView from "../views/student/MyApplicationsView";
 import TpoDashboardLayout from "../components/tpo/TpoDashboardLayout";
 import TpoDashboardView from "../views/tpo/DashboardView";
@@ -23,6 +21,8 @@ import ManageDriveView from "../views/tpo/ManageDriveView";
 import StudentApprovalView from "../views/tpo/StudentApprovalView";
 import LearningResourcesView from "../views/student/LearningResourcesView";
 import CareerManagementView from "../views/student/CareerManagementView";
+import DashboardLayout from "../components/student/DashboardLayout";
+import { UserRole } from "../utils/enums";
 
 export const appRoutes: RouteObject[] = [
   // 1. PUBLIC / GUEST ONLY ROUTES
