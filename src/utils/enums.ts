@@ -70,7 +70,7 @@ export const DriveStatus = {
   OPEN: "Open",
   CLOSED: "Closed",
   ARCHIVED: "Archived",
-}
+};
 
 export type DriveStatus = (typeof DriveStatus)[keyof typeof DriveStatus];
 
@@ -78,6 +78,17 @@ export const WorkMode = {
   ON_SITE: "Work from Office",
   REMOTE: "Work from Home",
   HYBRID: "Hybrid",
-}
+};
 
 export type WorkMode = (typeof WorkMode)[keyof typeof WorkMode];
+
+export const ApplicationStatus = {
+  APPLIED: "Applied",
+  OA_PENDING: "OA Pending",
+  SHORTLISTED: "Shortlisted",
+  INTERVIEW_SCHEDULED: "Interview Scheduled",
+  OFFERED: "Offered",
+  REJECTED: "Rejected",
+};
+
+export type ApplicationStatus = (typeof ApplicationStatus)[keyof typeof ApplicationStatus];

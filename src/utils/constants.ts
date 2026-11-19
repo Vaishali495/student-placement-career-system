@@ -1,5 +1,6 @@
 import { BookOpen, Briefcase, FileText, GraduationCap, KeyRound, LayoutDashboard, PlusCircle, ShieldAlert, User, UserCheck, Users } from "lucide-react";
 import type { IFaqItem, INavItem } from "./types";
+import type { CareerRoleOption } from "../views/student/CareerManagementView";
 
 export const STUDENT_NAV_ITEMS: INavItem[] = [
   { id: "dashboard", label: "Dashboard", path: "/student/dashboard", icon: LayoutDashboard, badge: null },
@@ -35,5 +36,37 @@ export const LOGIN_FAQS: IFaqItem[] = [
     question: "Account Locked or 'Session Unauthorized' Error?",
     answer:
       "Accounts automatically lock for 15 minutes after 5 consecutive failed authentication attempts in compliance with campus security policy.",
+  },
+];
+
+
+export const CAREER_ROLES: CareerRoleOption[] = [
+  {
+    id: "full-stack",
+    roleTitle: "Full Stack Developer",
+    packageRange: "₹6L – ₹14L",
+    minCgpa: 7.0,
+    requiredSkills: ["JavaScript", "TypeScript", "React", "Node.js", "MongoDB", "SQL", "Git"],
+  },
+  {
+    id: "frontend",
+    roleTitle: "Frontend Engineer",
+    packageRange: "₹5L – ₹12L",
+    minCgpa: 7.0,
+    requiredSkills: ["HTML", "CSS", "JavaScript", "TypeScript", "React", "Tailwind CSS", "Git"],
+  },
+  {
+    id: "backend",
+    roleTitle: "Backend Engineer",
+    packageRange: "₹6L – ₹15L",
+    minCgpa: 7.0,
+    requiredSkills: ["Node.js", "TypeScript", "SQL", "MongoDB", "REST APIs", "Git", "Docker"],
+  },
+  {
+    id: "software-engineer",
+    roleTitle: "Software Engineer (SDE)",
+    packageRange: "₹7L – ₹18L",
+    minCgpa: 7.5,
+    requiredSkills: ["Data Structures", "Algorithms", "Java", "C++", "SQL", "OOP", "Git"],
   },
 ];

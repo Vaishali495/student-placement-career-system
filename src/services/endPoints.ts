@@ -14,4 +14,8 @@ export const API_ENDPOINTS = {
     GET_ALL: "/drive",
     CREATE: "/drive/create",
   },
+  APPLICATIONS: {
+    APPLY: "/application/apply",
+    MY_APPLICATIONS: "/application/my-applications"
+  },
 } as const;
