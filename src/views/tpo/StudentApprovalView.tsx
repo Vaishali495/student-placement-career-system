@@ -9,7 +9,7 @@ const StudentApprovalView = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-black text-slate-900">Students Management &amp; Candidate Directory</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Verify academic records, manage ATS resumes, and issue TPO clearances.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Verify academic records, manage resumes, and issue TPO clearances.</p>
         </div>
         <div className="flex gap-2">
           <button className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl transition">

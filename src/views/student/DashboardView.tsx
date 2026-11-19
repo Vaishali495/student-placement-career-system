@@ -1,28 +1,75 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock,
-  ExternalLink,
   ChevronRight,
   Megaphone,
-  Send,
-  Calendar,
   Award,
   Bell,
-  Sparkles,
-  ArrowUpRight,
+  FileText,
+  ShieldCheck,
+  AlertCircle,
+  Loader2,
+  MapPin,
+  Briefcase,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import type { Drive } from "../../utils/types";
+import { AcademicVerificationStatus } from "../../utils/enums";
+import { useAuth } from "../../context/AuthContext";
+import { useStudent } from "../../context/StudentContext";
+import { getPlacementDrivesApi } from "../../services/driveService";
 
-const DashboardView = () => {
+const MS_PER_DAY = 86_400_000;
+
+const formatDeadline = (isoDate: string): string => {
+  const deadline = new Date(isoDate);
+  if (Number.isNaN(deadline.getTime())) return "N/A";
+  const diffDays = Math.ceil((deadline.getTime() - Date.now()) / MS_PER_DAY);
+  if (diffDays < 0) return "Closed";
+  if (diffDays === 0) return "Closes today";
+  if (diffDays === 1) return "Closes in 1 day";
+  if (diffDays <= 7) return `Closes in ${diffDays} days`;
+  return deadline.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const DashboardView: React.FC = () => {
   const navigate = useNavigate();
-  const [driveFilter, setDriveFilter] = useState<"all" | "eligible" | "tier1">("eligible");
+  const { user } = useAuth();
+  const { profile, loadingProfile: profileLoading } = useStudent();
 
-  // Calculated Readiness Score Values
-  const isProfileComplete = true; // 30%
-  const isResumeUploaded = true;  // 30%
-  const isSkillsAdded = true;     // 20%
-  const isTpoCleared = true;      // 20%
+  const [drives, setDrives] = useState<Drive[]>([]);
+  const [drivesLoading, setDrivesLoading] = useState<boolean>(true);
+  const [driveFilter, setDriveFilter] = useState<"eligible" | "all">("eligible");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchDrives = async () => {
+      try {
+        setDrivesLoading(true);
+        const res = await getPlacementDrivesApi();
+        if (isMounted && res.success) {
+          setDrives(res.data || []);
+        }
+      } catch {
+        // Keep empty drives list gracefully on dashboard
+      } finally {
+        if (isMounted) setDrivesLoading(false);
+      }
+    };
+
+    fetchDrives();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 1. Dynamic Placement Readiness Score (100% total)
+  const isProfileComplete = Boolean(profile?.course && profile?.cgpa !== undefined && profile?.graduationYear);
+  const isResumeUploaded = Boolean(profile?.resume?.url);
+  const isSkillsAdded = (profile?.skills?.length ?? 0) >= 3;
+  const isTpoCleared = profile?.academicVerification?.status === AcademicVerificationStatus.VERIFIED;
 
   const overallReadiness =
     (isProfileComplete ? 30 : 0) +
@@ -30,52 +77,114 @@ const DashboardView = () => {
     (isSkillsAdded ? 20 : 0) +
     (isTpoCleared ? 20 : 0);
 
-  // SVG Circular Donut Math
   const radius = 28;
   const strokeWidth = 5;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (overallReadiness / 100) * circumference;
 
+  // 2. Derived Drive Metrics
+  const eligibleDrives = useMemo(() => drives.filter((d) => d.isEligible), [drives]);
+
+  const closingSoonDrives = useMemo(() => {
+    const now = Date.now();
+    return drives.filter((d) => {
+      const diff = new Date(d.registrationDeadline).getTime() - now;
+      return diff >= 0 && diff <= 7 * MS_PER_DAY;
+    });
+  }, [drives]);
+
+  const highestCtc = useMemo(() => {
+    if (drives.length === 0) return 0;
+    return Math.max(...drives.map((d) => d.ctcTotal || 0));
+  }, [drives]);
+
+  const highestEligibleCtc = useMemo(() => {
+    if (eligibleDrives.length === 0) return 0;
+    return Math.max(...eligibleDrives.map((d) => d.ctcTotal || 0));
+  }, [eligibleDrives]);
+
+  const displayedDrives = useMemo(() => {
+    const list = driveFilter === "eligible" ? eligibleDrives : drives;
+    return list.slice(0, 4);
+  }, [driveFilter, eligibleDrives, drives]);
+
+  const firstName = (user?.fullName || profile?.fullName || "Student").split(" ")[0];
+  const currentSem = profile?.semesterRecords?.length
+    ? `Sem ${Math.max(...profile.semesterRecords.map((s) => s.semesterNumber))}`
+    : profile?.graduationYear
+      ? `Batch ${profile.graduationYear}`
+      : "";
+
+  if (profileLoading && drivesLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] gap-3 text-slate-500">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-sm font-semibold">Loading your placement dashboard...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Section 1: Integrated Welcome Banner & Progress Bar Card */}
+      {/* Section 1: Integrated Welcome Banner & Placement Readiness Card */}
       <div className="w-full bg-[#edf2ff] border border-blue-100 rounded-2xl p-6 md:p-8 shadow-xs flex flex-col lg:flex-row items-stretch justify-between gap-6">
-        
         {/* Left Welcome Info */}
         <div className="flex-1 flex flex-col justify-between">
           <div>
             <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider bg-white px-2.5 py-1 rounded-xl border border-blue-100">
-              <span className="w-2 h-2 rounded-full bg-green-600 shrink-0"></span>
-              OFFICIAL TPO CLEARANCE: TIER-1 DREAM STATUS ACTIVE
+              <span className={`w-2 h-2 rounded-full shrink-0 ${isTpoCleared ? "bg-green-600" : "bg-amber-500"}`} />
+              {isTpoCleared ? "OFFICIAL TPO CLEARANCE: VERIFIED & ACTIVE" : "TPO PROFILE VERIFICATION: PENDING"}
             </span>
-            <h1 className="text-3xl font-bold mt-3 text-slate-900 tracking-wide">Welcome back, Arjun! 👋</h1>
-            <p className="text-sm text-slate-500 mt-1.5">
-              Campus Recruitment Season 2025-26 • B.Tech Computer Science (Sem 7) •{" "}
-              <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                CGPA: 8.84 (Verified)
+            <h1 className="text-3xl font-bold mt-3 text-slate-900 tracking-wide">Welcome back, {firstName}!</h1>
+            <p className="text-sm text-slate-500 mt-1.5 flex flex-wrap items-center gap-2">
+              <span>
+                {profile?.course || "Student"}
+                {profile?.field ? ` (${profile.field})` : ""}
+                {currentSem ? ` • ${currentSem}` : ""}
               </span>
+              {profile?.cgpa !== undefined && (
+                <span
+                  className={`font-semibold px-2 py-0.5 rounded border text-xs ${
+                    isTpoCleared
+                      ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                      : "text-slate-700 bg-white border-slate-200"
+                  }`}
+                >
+                  CGPA: {profile.cgpa} {isTpoCleared ? "(Verified)" : "(Unverified)"}
+                </span>
+              )}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3 mt-6">
             <button
+              type="button"
               onClick={() => navigate("/student/profile")}
-              className="bg-[#2563eb] hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer">
-              Update Resume (v3.4)
+              className="bg-[#2563eb] hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
+            >
+              {isResumeUploaded ? "Manage Profile & Resume" : "Upload Resume"}
             </button>
             <button
+              type="button"
               onClick={() => navigate("/student/drives")}
-              className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer">
-              View Eligible Drives (14)
+              className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+            >
+              View Eligible Drives ({eligibleDrives.length})
             </button>
           </div>
         </div>
 
-        {/* Right Progress Card (Inside Blue Div) */}
+        {/* Right Placement Readiness Card */}
         <div className="w-full lg:w-[380px] bg-white rounded-2xl p-5 shadow-xs flex flex-col justify-between border border-blue-100/80 shrink-0">
           <div className="flex justify-between items-center">
             <h3 className="font-bold text-slate-800 text-sm">Placement Readiness</h3>
-            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">COHORT TOP 5%</span>
+            <span
+              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
+                overallReadiness === 100 ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+              }`}
+            >
+              {overallReadiness === 100 ? "DRIVE READY" : "ACTION NEEDED"}
+            </span>
           </div>
 
           <div className="flex items-center gap-4 my-3">
@@ -101,456 +210,341 @@ const DashboardView = () => {
             <div className="flex-1 space-y-2">
               <div>
                 <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
-                  <span>Academic Clearances</span>
-                  <span className="text-emerald-600 font-bold">100% Verified</span>
+                  <span>Academic Verification</span>
+                  <span className={isTpoCleared ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
+                    {isTpoCleared ? "Verified" : "Pending"}
+                  </span>
                 </div>
                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full w-full rounded-full"></div>
+                  <div className={`h-full rounded-full ${isTpoCleared ? "bg-emerald-500 w-full" : "bg-amber-400 w-1/2"}`} />
                 </div>
               </div>
 
               <div>
                 <div className="flex justify-between text-xs text-slate-600 font-medium mb-1">
-                  <span>Resume & Skill Mapping</span>
-                  <span className="text-blue-600 font-bold">Uploaded</span>
+                  <span>Resume &amp; Skills ({profile?.skills?.length ?? 0})</span>
+                  <span className="text-blue-600 font-bold">{isResumeUploaded ? "Uploaded" : "Missing"}</span>
                 </div>
                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-blue-600 h-full w-full rounded-full"></div>
+                  <div
+                    className={`bg-blue-600 h-full rounded-full ${
+                      isResumeUploaded && isSkillsAdded ? "w-full" : isResumeUploaded || isSkillsAdded ? "w-1/2" : "w-1/6"
+                    }`}
+                  />
                 </div>
               </div>
             </div>
           </div>
 
           <p className="text-xs text-slate-500 flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Full Access to Campus Placement Drives</span>
+            <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${overallReadiness === 100 ? "text-emerald-600" : "text-slate-400"}`} />
+            <span>
+              {overallReadiness === 100
+                ? "Full Access to Campus Placement Drives"
+                : "Complete profile, resume & 3+ skills for 100% readiness"}
+            </span>
           </p>
         </div>
       </div>
 
       {/* Section 2: 4 Key Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
         {/* Card 1: Eligible Drives */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
               <Megaphone className="w-5 h-5" />
             </div>
-            <span className="bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">+4 New</span>
+            <span className="bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+              {drives.length} Active
+            </span>
           </div>
           <div className="mt-4">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Eligible Drives</p>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-slate-900">28</span>
-              <span className="text-xs text-slate-500 font-medium">Total</span>
+              <span className="text-2xl font-black text-slate-900">{eligibleDrives.length}</span>
+              <span className="text-xs text-slate-500 font-medium">of {drives.length} Total</span>
             </div>
             <p className="text-xs text-emerald-600 font-semibold mt-2 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> 14 Active Deadlines this week
+              <Clock className="w-3.5 h-3.5" /> {closingSoonDrives.length} Closing within 7 days
             </p>
           </div>
         </div>
 
-        {/* Card 2: Applications Sent */}
+        {/* Card 2: Academic Standing */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="p-2.5 bg-slate-100 text-slate-700 rounded-xl">
-              <Send className="w-5 h-5" />
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <span className="bg-purple-100 text-purple-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">In Pipeline</span>
+            <span
+              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                isTpoCleared ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {isTpoCleared ? "Verified" : "Pending"}
+            </span>
           </div>
           <div className="mt-4">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Applications Sent</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Academic Standing</p>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-slate-900">9</span>
-              <span className="text-xs text-slate-500 font-medium">Applied</span>
+              <span className="text-2xl font-black text-slate-900">{profile?.cgpa ?? "N/A"}</span>
+              <span className="text-xs text-slate-500 font-medium">CGPA</span>
             </div>
-            <div className="flex items-center gap-3 mt-2 text-xs">
-              <span className="text-slate-600 font-medium">3 Active rounds</span>
-              <span className="text-emerald-600 font-bold">1 Offer Received</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Shortlisted / Interviews */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Round 2</span>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Shortlisted / Interviews</p>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-slate-900">4</span>
-              <span className="text-xs text-slate-500 font-medium">Rounds</span>
-            </div>
-            <p className="text-xs text-red-600 font-semibold mt-2 truncate">
-              Next: Oracle Tech Round tomorrow...
+            <p className="text-xs text-slate-600 font-medium mt-2">
+              Active Backlogs: <span className="font-bold text-slate-800">{profile?.backlogCount ?? 0}</span>
             </p>
           </div>
         </div>
 
-        {/* Card 4: Dream Offer Target */}
+        {/* Card 3: Skills & Resume */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+              <FileText className="w-5 h-5" />
+            </div>
+            <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+              {isResumeUploaded ? "Resume Ready" : "No Resume"}
+            </span>
+          </div>
+          <div className="mt-4">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mapped Skills</p>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-2xl font-black text-slate-900">{profile?.skills?.length ?? 0}</span>
+              <span className="text-xs text-slate-500 font-medium">Skills</span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-2 truncate">
+              {profile?.skills?.slice(0, 3).join(", ") || "Add skills in your profile"}
+            </p>
+          </div>
+        </div>
+
+        {/* Card 4: Top Package Available */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div className="p-2.5 bg-blue-600 text-white rounded-xl">
               <Award className="w-5 h-5" />
             </div>
-            <span className="bg-blue-100 text-blue-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Dream Tier</span>
+            <span className="bg-blue-100 text-blue-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">Campus Peak</span>
           </div>
           <div className="mt-4">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dream Offer Target</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Highest Drive CTC</p>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black text-blue-700">₹24.5</span>
+              <span className="text-2xl font-black text-blue-700">₹{highestCtc}</span>
               <span className="text-xs text-blue-900 font-bold">LPA</span>
             </div>
             <p className="text-xs text-slate-500 font-medium mt-2">
-              Peak: Microsoft SDE @ <span className="font-bold text-slate-800">₹42 LPA</span>
+              Your Eligible Peak: <span className="font-bold text-slate-800">₹{highestEligibleCtc} LPA</span>
             </p>
           </div>
         </div>
-
       </div>
 
-      {/* Section 3: Main Split Grid (Drives List + Right Sidebar Widgets) */}
+      {/* Section 3: Main Split Grid (Drives List + Action Alerts) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Columns: Upcoming Placement Drives & Critical Deadlines */}
+        {/* Left 2 Columns: Upcoming Placement Drives */}
         <div className="lg:col-span-2 space-y-4">
-          
-          {/* Header Filter Bar */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Upcoming Placement Drives & Critical Deadlines</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Verified on-campus recruiting schedules. Applications close automatically.</p>
+              <h2 className="text-base font-bold text-slate-900">Active Campus Placement Drives</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Live recruiter drives matched against your academic profile.</p>
             </div>
 
-            {/* Filter Buttons */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
               <button
+                type="button"
                 onClick={() => setDriveFilter("eligible")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                   driveFilter === "eligible" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                }`}>
-                Eligible Only
+                }`}
+              >
+                Eligible Only ({eligibleDrives.length})
               </button>
               <button
-                onClick={() => setDriveFilter("tier1")}
+                type="button"
+                onClick={() => setDriveFilter("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                  driveFilter === "tier1" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                }`}>
-                Tier-1 Dream
+                  driveFilter === "all" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                All Active ({drives.length})
               </button>
             </div>
           </div>
 
-          {/* Drive Card 1: Google India */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:border-blue-300 transition-colors">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-              <div className="flex gap-3 items-start">
-                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-700 text-lg shrink-0">
-                  G
+          {displayedDrives.length === 0 ? (
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-10 text-center">
+              <p className="text-sm font-bold text-slate-700">
+                {driveFilter === "eligible"
+                  ? "No eligible drives found right now."
+                  : "No active placement drives posted yet."}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {driveFilter === "eligible"
+                  ? "Switch to 'All Active' to inspect criteria for other drives."
+                  : "Check back soon for new TPO announcements."}
+              </p>
+            </div>
+          ) : (
+            displayedDrives.map((drive) => (
+              <div
+                key={drive._id}
+                className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:border-blue-300 transition-colors"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                  <div className="flex gap-3 items-start">
+                    <div className="w-12 h-12 bg-blue-100 text-blue-700 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 uppercase">
+                      {drive.companyName?.[0] || "C"}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-bold text-slate-900">{drive.companyName}</h3>
+                        <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md uppercase">
+                          {drive.jobType}
+                        </span>
+                        {drive.workMode && (
+                          <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md uppercase">
+                            {drive.workMode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">{drive.roleTitle}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-left sm:text-right">
+                    <span className="text-2xl font-black text-slate-900">
+                      ₹{drive.ctcTotal} <span className="text-sm font-bold">LPA</span>
+                    </span>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Batch &apos;{String(drive.batchYear).slice(-2)}</p>
+                  </div>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-slate-900">Google India</h3>
-                    <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md uppercase">
-                      Tier 1 • Super Dream
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4 p-3 bg-slate-50 rounded-xl text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">ELIGIBILITY</span>
+                    {drive.isEligible ? (
+                      <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Eligible (≥ {drive.eligibilityCriteria?.minCgpa ?? 0})
+                      </span>
+                    ) : (
+                      <span className="font-bold text-rose-600 flex items-center gap-1 mt-0.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> Min CGPA {drive.eligibilityCriteria?.minCgpa ?? 0}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">LOCATION</span>
+                    <span className="font-medium text-slate-700 mt-0.5 flex items-center gap-1 truncate">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {drive.location}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Software Development Engineer - 1 (Cloud Platform)</p>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <span className="text-2xl font-black text-slate-900">₹32.0 <span className="text-sm font-bold">LPA</span></span>
-                <p className="text-[11px] text-slate-400 mt-0.5">Base: ₹19.5 LPA + Stocks</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4 p-3 bg-slate-50 rounded-xl text-xs">
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">ELIGIBILITY</span>
-                <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> CGPA ≥ 8.5 Met
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">LOCATION</span>
-                <span className="font-medium text-slate-700 mt-0.5 block">Bengaluru / Hyderabad</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">ASSESSMENT SLOT</span>
-                <span className="font-medium text-slate-700 mt-0.5 block">Nov 18, 09:00 AM</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">REGISTRATION CUTOFF</span>
-                <span className="font-bold text-red-600 mt-0.5 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Closes in 18 hrs
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
-              <span className="text-xs text-slate-400 font-mono">TPO Drive ID: #PC-2025-089 • PPT Attendance Required</span>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button className="flex-1 sm:flex-initial bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors cursor-pointer">
-                  JD & Syllabus
-                </button>
-                <button className="flex-1 sm:flex-initial bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs">
-                  Quick Apply
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Drive Card 2: Goldman Sachs */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:border-blue-300 transition-colors">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-              <div className="flex gap-3 items-start">
-                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-700 text-lg shrink-0">
-                  GS
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-slate-900">Goldman Sachs</h3>
-                    <span className="text-[10px] font-extrabold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md uppercase">
-                      Tier 1 • Dream
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">SKILL MATCH</span>
+                    <span className="font-bold text-blue-700 mt-0.5 block">{drive.skillMatchPercent ?? 100}% Fit</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">DEADLINE</span>
+                    <span className="font-bold text-red-600 mt-0.5 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 shrink-0" /> {formatDeadline(drive.registrationDeadline)}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">Summer Engineering Analyst (Conversion Track)</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
+                  <span className="text-xs text-slate-500 font-medium truncate">
+                    {drive.requiredSkills?.length
+                      ? `Skills: ${drive.requiredSkills.slice(0, 4).join(", ")}`
+                      : "Open to all eligible candidates"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/drives")}
+                    className="w-full sm:w-auto bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1"
+                  >
+                    View Drive &amp; Apply <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-
-              <div className="text-left sm:text-right">
-                <span className="text-2xl font-black text-slate-900">₹26.0 <span className="text-sm font-bold">LPA</span></span>
-                <p className="text-[11px] text-slate-400 mt-0.5">Stipend: ₹1.25L / mo</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4 p-3 bg-slate-50 rounded-xl text-xs">
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">ELIGIBILITY</span>
-                <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Eligible ✓
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">LOCATION</span>
-                <span className="font-medium text-slate-700 mt-0.5 block">Bengaluru</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">ONLINE TEST (OA)</span>
-                <span className="font-medium text-slate-700 mt-0.5 block">Saturday, 4:00 PM</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">REGISTRATION CUTOFF</span>
-                <span className="font-bold text-red-600 mt-0.5 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Closes in 2 days
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
-              <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Eligibility Form Pre-filled
-              </span>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button className="flex-1 sm:flex-initial bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors cursor-pointer">
-                  Details
-                </button>
-                <button className="flex-1 sm:flex-initial bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs">
-                  Quick Apply
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Drive Card 3: Atlassian */}
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:border-blue-300 transition-colors">
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-              <div className="flex gap-3 items-start">
-                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-700 text-lg shrink-0">
-                  ATL
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-slate-900">Atlassian</h3>
-                    <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md uppercase">
-                      Super Dream
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">Associate Site Reliability Engineer (Remote First)</p>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <span className="text-2xl font-black text-slate-900">₹34.5 <span className="text-sm font-bold">LPA</span></span>
-                <p className="text-[11px] text-slate-400 mt-0.5">Includes WFH Allowances</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-4 p-3 bg-slate-50 rounded-xl text-xs">
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">ELIGIBILITY</span>
-                <span className="font-bold text-emerald-700 flex items-center gap-1 mt-0.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Eligible ✓
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">WORK MODE</span>
-                <span className="font-medium text-slate-700 mt-0.5 block">Remote / Hybrid</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">CODING ASSESSMENT</span>
-                <span className="font-medium text-slate-700 mt-0.5 block">Nov 22, 11:00 AM</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-bold uppercase">REGISTRATION CUTOFF</span>
-                <span className="font-bold text-slate-700 mt-0.5 block">Closes in 4 days</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
-              <span className="text-xs text-slate-500 font-medium">Shortlist Criteria: DSA + Distributed Systems fundamentals</span>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button className="flex-1 sm:flex-initial bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition-colors cursor-pointer">
-                  Details
-                </button>
-                <button className="flex-1 sm:flex-initial bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs">
-                  Quick Apply
-                </button>
-              </div>
-            </div>
-          </div>
-
+            ))
+          )}
         </div>
 
-        {/* Right 1 Column: Widgets Stack (Action Alerts + Goal Fit Snapshot) */}
+        {/* Right 1 Column: Action Alerts & Checklist */}
         <div className="space-y-6">
-          
-          {/* Widget 1: Action Alerts */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4 text-red-500" />
                 <h3 className="text-base font-bold text-slate-900">Action Alerts</h3>
               </div>
-              <span className="text-[10px] font-extrabold bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full uppercase">
-                2 Urgent
+              <span className="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full uppercase">
+                Live Status
               </span>
             </div>
 
             <div className="space-y-3">
-              
-              {/* Alert 1 */}
-              <div className="p-3.5 bg-red-50/80 border-l-4 border-red-500 rounded-r-xl">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">
-                    URGENT DEADLINE
-                  </span>
-                  <span className="text-[10px] text-red-600 font-bold">Today • 6:00 PM</span>
+              {closingSoonDrives[0] && (
+                <div className="p-3.5 bg-red-50/80 border-l-4 border-red-500 rounded-r-xl">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">UPCOMING DEADLINE</span>
+                    <span className="text-[10px] text-red-600 font-bold">
+                      {formatDeadline(closingSoonDrives[0].registrationDeadline)}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-900 mt-1.5">
+                    {closingSoonDrives[0].companyName} • {closingSoonDrives[0].roleTitle}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/drives")}
+                    className="text-xs font-bold text-red-700 hover:underline mt-2 flex items-center gap-1 cursor-pointer"
+                  >
+                    Open Drive Details <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <p className="text-xs font-bold text-slate-900 mt-1.5">
-                  Oracle Technical Interview Slot Booking
-                </p>
-                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  Confirm your 45-minute panel slot before 6 PM today or slot will forfeit to waiting list.
-                </p>
-                <button className="text-xs font-bold text-red-700 hover:underline mt-2 flex items-center gap-1 cursor-pointer">
-                  Select Interview Slot <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              )}
 
-              {/* Alert 2 */}
+              {!isResumeUploaded && (
+                <div className="p-3.5 bg-amber-50/80 border-l-4 border-amber-500 rounded-r-xl">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">PROFILE ACTION</span>
+                  <p className="text-xs font-bold text-slate-900 mt-1">Upload Your Latest Resume</p>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    A PDF resume is required before submitting applications to campus placement drives.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/profile")}
+                    className="text-xs font-bold text-amber-800 hover:underline mt-2 flex items-center gap-1 cursor-pointer"
+                  >
+                    Go to Profile <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               <div className="p-3.5 bg-blue-50/80 border-l-4 border-blue-500 rounded-r-xl">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">
-                    FEEDBACK
-                  </span>
-                  <span className="text-[10px] text-slate-400">Yesterday</span>
-                </div>
-                <p className="text-xs font-bold text-slate-900 mt-1.5">
-                  Resume Feedback: Approved v3.4
+                <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">TPO VERIFICATION</span>
+                <p className="text-xs font-bold text-slate-900 mt-1">
+                  {isTpoCleared ? "Academic Records Verified" : "Awaiting TPO Verification"}
                 </p>
                 <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  Prof. Nair (TPO) approved your resume version for Tier-1 Super Dream companies with 0 flags.
+                  {isTpoCleared
+                    ? "Your CGPA, branch, and graduation year are cleared for automated drive eligibility checks."
+                    : "Ensure your CGPA, semester records, and course details are accurate for TPO review."}
                 </p>
               </div>
 
-              {/* Alert 3 */}
-              <div className="p-3.5 bg-indigo-50/80 border-l-4 border-indigo-500 rounded-r-xl">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
-                    ASSESSMENT
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-medium">Sat • 4:00 PM</span>
+              <div className="p-3.5 bg-slate-50 border-l-4 border-slate-400 rounded-r-xl">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                  <Briefcase className="w-3.5 h-3.5" /> PLACEMENT POLICY
                 </div>
-                <p className="text-xs font-bold text-slate-900 mt-1.5">
-                  Goldman Sachs HackerRank OA
-                </p>
                 <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  System readiness check required 30 mins prior. Requires webcam + Chrome proctoring extension.
+                  Applications close automatically at the drive registration cutoff. Keep your skills list updated for accurate role matching.
                 </p>
-                <button className="text-xs font-bold text-indigo-700 hover:underline mt-2 flex items-center gap-1 cursor-pointer">
-                  Test System Setup <ExternalLink className="w-3 h-3" />
-                </button>
               </div>
-
             </div>
           </div>
-
-          {/* Widget 2: Goal Fit Snapshot */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-base font-bold text-slate-900">Goal Fit Snapshot</h3>
-              <span className="text-xs font-bold text-blue-600 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Career AI
-              </span>
-            </div>
-
-            <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4">
-              <div className="flex justify-between items-baseline">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  TARGET ASPIRANT ROLE
-                </span>
-                <span className="text-xl font-extrabold text-blue-600">76%</span>
-              </div>
-              <h4 className="text-sm font-bold text-slate-900 mt-0.5">Full Stack Cloud Engineer</h4>
-
-              <p className="text-[11px] text-slate-600 mt-2 leading-relaxed">
-                Based on 14 eligible job descriptions, you are highly competitive in Spring Boot, React, and Data Structures.
-              </p>
-
-              <div className="mt-3.5 pt-3 border-t border-blue-100/80">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                  MISSING SKILL TAGS:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                    System Design (HLD)
-                  </span>
-                  <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                    Kubernetes
-                  </span>
-                  <span className="bg-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                    gRPC / Protobuf
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => navigate("/student/career")}
-                className="w-full mt-4 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs">
-                Open Full Career Plan <ArrowUpRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
         </div>
-
       </div>
     </div>
   );

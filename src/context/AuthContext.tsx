@@ -2,31 +2,20 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import api from "../services/api";
-import type { UserRole } from "../utils/enums";
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  rollNumber?: string;
-  course?: string;
-  organization?: string;
-  designation?: string;
-}
+import type { AuthUser } from "../utils/types";
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   token: string | null;
   isAuthenticated: boolean;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: AuthUser) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
+  const [user, setUser] = useState<AuthUser | null>(() => {
     const savedUser = localStorage.getItem("user");
     return savedUser ? JSON.parse(savedUser) : null;
   });
@@ -43,7 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
-  const login = (newToken: string, newUser: User) => {
+  const login = (newToken: string, newUser: AuthUser) => {
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem("token", newToken);

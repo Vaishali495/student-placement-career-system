@@ -1,32 +1,43 @@
 import api from "./api";
+import type {
+  ApiResponse,
+  AuthUser,
+  LoginPayload,
+  LoginResponseData,
+  StudentRegisterPayload,
+  TpoRegisterPayload,
+} from "../utils/types";
+import { API_ENDPOINTS } from "./endPoints";
 
-// Student Registration
-export const registerStudentApi = async (data: any) => {
-  const response = await api.post("/auth/register-student", data);
+export const registerStudentApi = async (
+  data: StudentRegisterPayload,
+): Promise<ApiResponse<{ user: AuthUser }>> => {
+  const response = await api.post(API_ENDPOINTS.AUTH.REGISTER_STUDENT, data);
   return response.data;
 };
 
-// TPO Registration
-export const registerTpoApi = async (data: any) => {
-  const response = await api.post("/auth/register-tpo", data);
+export const registerTpoApi = async (
+  data: TpoRegisterPayload,
+): Promise<ApiResponse<{ user: AuthUser }>> => {
+  const response = await api.post(API_ENDPOINTS.AUTH.REGISTER_TPO, data);
   return response.data;
 };
 
-// User Login (Email or Roll No)
-export const loginApi = async (data: { identifier: string; password: string; activeTab?: string }) => {
-  const response = await api.post("/auth/login", data);
+export const loginApi = async (
+  data: LoginPayload,
+): Promise<ApiResponse<LoginResponseData>> => {
+  const response = await api.post(API_ENDPOINTS.AUTH.LOGIN, data);
   return response.data;
 };
 
-export const verifyEmailApi = async (token: string) => {
-  console.log("in email verify")
-  const response = await api.get(`/auth/verify-email?token=${encodeURIComponent(token)}`);
-  console.log("response of verify email: ",response.data);
+export const verifyEmailApi = async (token: string): Promise<ApiResponse> => {
+  const response = await api.get(API_ENDPOINTS.AUTH.VERIFY_EMAIL, {
+    params: { token },
+  });
   return response.data;
 };
 
-// Resend Verification Email
-export const resendVerificationApi = async (email: string) => {
-  const response = await api.post("/auth/resend-verification", { email });
+export const resendVerificationApi = async (email: string): Promise<ApiResponse> => {
+  const response = await api.post(API_ENDPOINTS.AUTH.RESEND_VERIFICATION, { email });
   return response.data;
 };

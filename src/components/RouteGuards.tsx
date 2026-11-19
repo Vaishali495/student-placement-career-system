@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { UserRole } from "../utils/enums";
 
@@ -7,13 +7,13 @@ interface ProtectedRouteProps {
   allowedRoles?: UserRole[];
 }
 
-// 1. Protected Route Guard (Bina login wale user dashboard access nahi kar sakte)
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
   const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     // If User is not logged In -> Redirect to Login
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Agar specific role allowed missing hai ya unauthorized access attempt ho
@@ -26,7 +26,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
   return <Outlet />;
 };
 
-// 2. Public Only Route Guard (Logged-in user login/register page open nahi kar sakta)
 export const PublicOnlyRoute: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
 

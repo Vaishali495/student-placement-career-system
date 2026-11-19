@@ -1,13 +1,8 @@
-import React from "react";
 import { Navigate } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
-
-// Student Views
 import DashboardView from "../views/student/DashboardView";
 import PlacementDrivesView from "../views/student/PlacementDrivesView";
 import ProfileView from "../views/student/ProfileView";
-
-// TPO Views
 import CreateDriveView from "../views/tpo/CreateDriveView";
 import { ProtectedRoute, PublicOnlyRoute } from "../components/RouteGuards";
 import LoginView from "../views/auth/LoginView";

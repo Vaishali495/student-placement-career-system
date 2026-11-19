@@ -1,17 +1,19 @@
 import api from "./api";
+import type { ApiResponse, IStudentProfile } from "../utils/types";
+import { API_ENDPOINTS } from "./endPoints";
 
-// Get student Profile data
-export const getStudentDataApi = async (userId: string | undefined) => {
-  const response = await api.get(`/student/get-data?userId=${userId}`);
+export const getStudentDataApi = async (
+  userId?: string,
+): Promise<ApiResponse<IStudentProfile>> => {
+  const response = await api.get(API_ENDPOINTS.STUDENT.GET_DATA, {
+    params: userId ? { userId } : undefined,
+  });
   return response.data;
 };
 
-// Submit student Profile data
-export const editStudentDataApi = async (data: any) => {
-  const response = await api.post("/student/edit-profile", data, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+export const editStudentDataApi = async (
+  data: FormData,
+): Promise<ApiResponse<IStudentProfile>> => {
+  const response = await api.post(API_ENDPOINTS.STUDENT.EDIT_PROFILE, data);
   return response.data;
 };
