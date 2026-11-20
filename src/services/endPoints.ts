@@ -13,6 +13,8 @@ export const API_ENDPOINTS = {
   DRIVES: {
     GET_ALL: "/drive",
     CREATE: "/drive/create",
+    UPDATE: "/drive/:id",
+    DELETE: "/drive/:id",
   },
   APPLICATIONS: {
     APPLY: "/application/apply",

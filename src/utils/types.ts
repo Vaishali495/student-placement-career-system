@@ -132,6 +132,8 @@ export interface Drive {
   matchedSkills?: string[];
   missingSkills?: string[];
   skillMatchPercent?: number;
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CreateDrivePayload {
@@ -173,3 +175,5 @@ export interface IFaqItem {
   question: string;
   answer: string;
 }
+
+export type UpdateDrivePayload = Partial<CreateDrivePayload>;
