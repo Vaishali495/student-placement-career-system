@@ -13,6 +13,7 @@ dist-ssr
 screens_by_stich_ai
 temp
 *.local
+.env
 
 # Editor directories and files
 .vscode/*
