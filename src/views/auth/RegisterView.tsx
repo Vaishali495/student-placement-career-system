@@ -8,8 +8,7 @@ import { Course, UserRole } from "../../utils/enums";
 
 const RegisterView = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const defaultRole = searchParams.get("role") || UserRole.STUDENT;
-  const [role, setRole] = useState<string>(defaultRole);
+  const [role, setRole] = useState<UserRole>((searchParams.get("role") as UserRole) || UserRole.STUDENT);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -29,7 +28,7 @@ const RegisterView = () => {
     confirmPassword: "",
   });
 
-  const handleRoleChange = (newRole: string) => {
+  const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole);
     setSearchParams({ role: newRole });
     // Reset specific fields when switching role
@@ -58,27 +57,39 @@ const RegisterView = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setFieldErrors({});
+
+    if (formData.password !== formData.confirmPassword) {
+      setFieldErrors({ confirmPassword: "Passwords do not match" });
+      return;
+    }
+
+    setLoading(true);
+    const basePayload = {
+      name: formData.fullName,
+      email: formData.email,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword,
+    };
 
     try {
       // API call payload according to active role
-      const payload = {
-        name: formData.fullName,
-        email: formData.email,
-        password: formData.password,
-        confirmPassword: formData.confirmPassword,
-        ...(role === UserRole.STUDENT
-          ? { rollNumber: formData.rollNo, course: formData.course }
-          : { organization: formData.organization, designation: formData.designation }),
-        role,
-      };
-
-      console.log("Registration Payload:", payload);
-      const response = role === UserRole.STUDENT ? await registerStudentApi(payload) : await registerTpoApi(payload);
+      const response =
+        role === UserRole.STUDENT
+          ? await registerStudentApi({
+              ...basePayload,
+              role: UserRole.STUDENT,
+              rollNumber: formData.rollNo,
+              course: formData.course,
+            })
+          : await registerTpoApi({
+              ...basePayload,
+              role: UserRole.TPO,
+              organization: formData.organization,
+              designation: formData.designation,
+            });
 
       console.log("Registration successful:", response);
-
       navigate("/verify-email-notice", { state: { email: formData.email } });
     } catch (error) {
       console.error("Registration error:", error);

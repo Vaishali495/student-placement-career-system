@@ -41,6 +41,7 @@ const DashboardView: React.FC = () => {
   const [drives, setDrives] = useState<Drive[]>([]);
   const [drivesLoading, setDrivesLoading] = useState<boolean>(true);
   const [driveFilter, setDriveFilter] = useState<"eligible" | "all">("eligible");
+  const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
     let isMounted = true;
@@ -65,17 +66,21 @@ const DashboardView: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60_000); // har 1 minute mein reference time update
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   // 1. Dynamic Placement Readiness Score (100% total)
   const isProfileComplete = Boolean(profile?.course && profile?.cgpa !== undefined && profile?.graduationYear);
   const isResumeUploaded = Boolean(profile?.resume?.url);
   const isSkillsAdded = (profile?.skills?.length ?? 0) >= 3;
   const isTpoCleared = profile?.academicVerification?.status === AcademicVerificationStatus.VERIFIED;
 
-  const overallReadiness =
-    (isProfileComplete ? 30 : 0) +
-    (isResumeUploaded ? 30 : 0) +
-    (isSkillsAdded ? 20 : 0) +
-    (isTpoCleared ? 20 : 0);
+  const overallReadiness = (isProfileComplete ? 30 : 0) + (isResumeUploaded ? 30 : 0) + (isSkillsAdded ? 20 : 0) + (isTpoCleared ? 20 : 0);
 
   const radius = 28;
   const strokeWidth = 5;
@@ -85,13 +90,22 @@ const DashboardView: React.FC = () => {
   // 2. Derived Drive Metrics
   const eligibleDrives = useMemo(() => drives.filter((d) => d.isEligible), [drives]);
 
+  // const closingSoonDrives = useMemo(() => {
+  //   const now = Date.now();
+  //   return drives.filter((d) => {
+  //     const diff = new Date(d.registrationDeadline).getTime() - now;
+  //     return diff >= 0 && diff <= 7 * MS_PER_DAY;
+  //   });
+  // }, [drives]);
+
   const closingSoonDrives = useMemo(() => {
-    const now = Date.now();
     return drives.filter((d) => {
-      const diff = new Date(d.registrationDeadline).getTime() - now;
+      const deadlineMs = new Date(d.registrationDeadline).getTime();
+      if (Number.isNaN(deadlineMs)) return false;
+      const diff = deadlineMs - now;
       return diff >= 0 && diff <= 7 * MS_PER_DAY;
     });
-  }, [drives]);
+  }, [drives, now]);
 
   const highestCtc = useMemo(() => {
     if (drives.length === 0) return 0;
@@ -108,7 +122,7 @@ const DashboardView: React.FC = () => {
     return list.slice(0, 4);
   }, [driveFilter, eligibleDrives, drives]);
 
-  const firstName = (user?.fullName || profile?.fullName || "Student").split(" ")[0];
+  const firstName = (user?.name || "Student").split(" ")[0];
   const currentSem = profile?.semesterRecords?.length
     ? `Sem ${Math.max(...profile.semesterRecords.map((s) => s.semesterNumber))}`
     : profile?.graduationYear
@@ -145,11 +159,8 @@ const DashboardView: React.FC = () => {
               {profile?.cgpa !== undefined && (
                 <span
                   className={`font-semibold px-2 py-0.5 rounded border text-xs ${
-                    isTpoCleared
-                      ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                      : "text-slate-700 bg-white border-slate-200"
-                  }`}
-                >
+                    isTpoCleared ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-slate-700 bg-white border-slate-200"
+                  }`}>
                   CGPA: {profile.cgpa} {isTpoCleared ? "(Verified)" : "(Unverified)"}
                 </span>
               )}
@@ -160,29 +171,26 @@ const DashboardView: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate("/student/profile")}
-              className="bg-[#2563eb] hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
-            >
+              className="bg-[#2563eb] hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer">
               {isResumeUploaded ? "Manage Profile & Resume" : "Upload Resume"}
             </button>
             <button
               type="button"
               onClick={() => navigate("/student/drives")}
-              className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer"
-            >
+              className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer">
               View Eligible Drives ({eligibleDrives.length})
             </button>
           </div>
         </div>
 
         {/* Right Placement Readiness Card */}
-        <div className="w-full lg:w-[380px] bg-white rounded-2xl p-5 shadow-xs flex flex-col justify-between border border-blue-100/80 shrink-0">
+        <div className="w-full lg:w-95 bg-white rounded-2xl p-5 shadow-xs flex flex-col justify-between border border-blue-100/80 shrink-0">
           <div className="flex justify-between items-center">
             <h3 className="font-bold text-slate-800 text-sm">Placement Readiness</h3>
             <span
               className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
                 overallReadiness === 100 ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
-              }`}
-            >
+              }`}>
               {overallReadiness === 100 ? "DRIVE READY" : "ACTION NEEDED"}
             </span>
           </div>
@@ -239,9 +247,7 @@ const DashboardView: React.FC = () => {
           <p className="text-xs text-slate-500 flex items-center gap-1.5">
             <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${overallReadiness === 100 ? "text-emerald-600" : "text-slate-400"}`} />
             <span>
-              {overallReadiness === 100
-                ? "Full Access to Campus Placement Drives"
-                : "Complete profile, resume & 3+ skills for 100% readiness"}
+              {overallReadiness === 100 ? "Full Access to Campus Placement Drives" : "Complete profile, resume & 3+ skills for 100% readiness"}
             </span>
           </p>
         </div>
@@ -255,9 +261,7 @@ const DashboardView: React.FC = () => {
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
               <Megaphone className="w-5 h-5" />
             </div>
-            <span className="bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-              {drives.length} Active
-            </span>
+            <span className="bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-0.5 rounded-full">{drives.length} Active</span>
           </div>
           <div className="mt-4">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Eligible Drives</p>
@@ -280,8 +284,7 @@ const DashboardView: React.FC = () => {
             <span
               className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
                 isTpoCleared ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-              }`}
-            >
+              }`}>
               {isTpoCleared ? "Verified" : "Pending"}
             </span>
           </div>
@@ -356,8 +359,7 @@ const DashboardView: React.FC = () => {
                 onClick={() => setDriveFilter("eligible")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                   driveFilter === "eligible" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
+                }`}>
                 Eligible Only ({eligibleDrives.length})
               </button>
               <button
@@ -365,8 +367,7 @@ const DashboardView: React.FC = () => {
                 onClick={() => setDriveFilter("all")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                   driveFilter === "all" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
+                }`}>
                 All Active ({drives.length})
               </button>
             </div>
@@ -375,9 +376,7 @@ const DashboardView: React.FC = () => {
           {displayedDrives.length === 0 ? (
             <div className="bg-white border border-slate-200/90 rounded-2xl p-10 text-center">
               <p className="text-sm font-bold text-slate-700">
-                {driveFilter === "eligible"
-                  ? "No eligible drives found right now."
-                  : "No active placement drives posted yet."}
+                {driveFilter === "eligible" ? "No eligible drives found right now." : "No active placement drives posted yet."}
               </p>
               <p className="text-xs text-slate-400 mt-1">
                 {driveFilter === "eligible"
@@ -387,10 +386,7 @@ const DashboardView: React.FC = () => {
             </div>
           ) : (
             displayedDrives.map((drive) => (
-              <div
-                key={drive._id}
-                className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:border-blue-300 transition-colors"
-              >
+              <div key={drive._id} className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:border-blue-300 transition-colors">
                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                   <div className="flex gap-3 items-start">
                     <div className="w-12 h-12 bg-blue-100 text-blue-700 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 uppercase">
@@ -399,13 +395,9 @@ const DashboardView: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base font-bold text-slate-900">{drive.companyName}</h3>
-                        <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md uppercase">
-                          {drive.jobType}
-                        </span>
+                        <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md uppercase">{drive.jobType}</span>
                         {drive.workMode && (
-                          <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md uppercase">
-                            {drive.workMode}
-                          </span>
+                          <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md uppercase">{drive.workMode}</span>
                         )}
                       </div>
                       <p className="text-xs text-slate-500 mt-1">{drive.roleTitle}</p>
@@ -453,15 +445,12 @@ const DashboardView: React.FC = () => {
 
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-1">
                   <span className="text-xs text-slate-500 font-medium truncate">
-                    {drive.requiredSkills?.length
-                      ? `Skills: ${drive.requiredSkills.slice(0, 4).join(", ")}`
-                      : "Open to all eligible candidates"}
+                    {drive.requiredSkills?.length ? `Skills: ${drive.requiredSkills.slice(0, 4).join(", ")}` : "Open to all eligible candidates"}
                   </span>
                   <button
                     type="button"
                     onClick={() => navigate("/student/drives")}
-                    className="w-full sm:w-auto bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1"
-                  >
+                    className="w-full sm:w-auto bg-[#2563eb] hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1">
                     View Drive &amp; Apply <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -478,9 +467,7 @@ const DashboardView: React.FC = () => {
                 <Bell className="w-4 h-4 text-red-500" />
                 <h3 className="text-base font-bold text-slate-900">Action Alerts</h3>
               </div>
-              <span className="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full uppercase">
-                Live Status
-              </span>
+              <span className="text-[10px] font-extrabold bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full uppercase">Live Status</span>
             </div>
 
             <div className="space-y-3">
@@ -488,9 +475,7 @@ const DashboardView: React.FC = () => {
                 <div className="p-3.5 bg-red-50/80 border-l-4 border-red-500 rounded-r-xl">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">UPCOMING DEADLINE</span>
-                    <span className="text-[10px] text-red-600 font-bold">
-                      {formatDeadline(closingSoonDrives[0].registrationDeadline)}
-                    </span>
+                    <span className="text-[10px] text-red-600 font-bold">{formatDeadline(closingSoonDrives[0].registrationDeadline)}</span>
                   </div>
                   <p className="text-xs font-bold text-slate-900 mt-1.5">
                     {closingSoonDrives[0].companyName} • {closingSoonDrives[0].roleTitle}
@@ -498,8 +483,7 @@ const DashboardView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => navigate("/student/drives")}
-                    className="text-xs font-bold text-red-700 hover:underline mt-2 flex items-center gap-1 cursor-pointer"
-                  >
+                    className="text-xs font-bold text-red-700 hover:underline mt-2 flex items-center gap-1 cursor-pointer">
                     Open Drive Details <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -515,8 +499,7 @@ const DashboardView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => navigate("/student/profile")}
-                    className="text-xs font-bold text-amber-800 hover:underline mt-2 flex items-center gap-1 cursor-pointer"
-                  >
+                    className="text-xs font-bold text-amber-800 hover:underline mt-2 flex items-center gap-1 cursor-pointer">
                     Go to Profile <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -524,9 +507,7 @@ const DashboardView: React.FC = () => {
 
               <div className="p-3.5 bg-blue-50/80 border-l-4 border-blue-500 rounded-r-xl">
                 <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">TPO VERIFICATION</span>
-                <p className="text-xs font-bold text-slate-900 mt-1">
-                  {isTpoCleared ? "Academic Records Verified" : "Awaiting TPO Verification"}
-                </p>
+                <p className="text-xs font-bold text-slate-900 mt-1">{isTpoCleared ? "Academic Records Verified" : "Awaiting TPO Verification"}</p>
                 <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
                   {isTpoCleared
                     ? "Your CGPA, branch, and graduation year are cleared for automated drive eligibility checks."

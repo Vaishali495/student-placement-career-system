@@ -25,6 +25,7 @@ export interface StudentRegisterPayload {
   email: string;
   rollNumber: string;
   password: string;
+  confirmPassword: string;
   course: string;
   role: UserRole;
 }
@@ -33,6 +34,7 @@ export interface TpoRegisterPayload {
   name: string;
   email: string;
   password: string;
+  confirmPassword: string;
   organization: string;
   designation: string;
   role: UserRole;

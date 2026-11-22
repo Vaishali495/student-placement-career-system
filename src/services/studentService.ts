@@ -1,6 +1,7 @@
 import api from "./api";
 import type { ApiResponse, IStudentProfile } from "../utils/types";
 import { API_ENDPOINTS } from "./endPoints";
+import type { AcademicVerificationStatus } from "../utils/enums";
 
 export interface TpoStudentRecord extends IStudentProfile {
   _id: string;
@@ -23,7 +24,7 @@ export const getAllStudentsForTpoApi = async (): Promise<ApiResponse<TpoStudentR
   return response.data;
 };
 
-export const verifyStudentProfileApi = async (profileId: string, status: "verified" | "rejected"): Promise<ApiResponse<TpoStudentRecord>> => {
+export const verifyStudentProfileApi = async (profileId: string, status: AcademicVerificationStatus): Promise<ApiResponse<TpoStudentRecord>> => {
   const response = await api.patch(`/tpo/students/${encodeURIComponent(profileId)}/verify`, {
     status,
   });
