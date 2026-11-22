@@ -14,15 +14,17 @@ import {
   Briefcase,
   Loader2,
   AlertCircle,
+  X,
 } from "lucide-react";
 import type { Drive, IDriveTabItem } from "../../utils/types";
 import { useStudent } from "../../context/StudentContext";
 import { AcademicVerificationStatus, DriveFilterTab } from "../../utils/enums";
-import { getPlacementDrivesApi } from "../../services/driveService";
+import { applyToDriveApi, getPlacementDrivesApi } from "../../services/driveService";
 
 interface DriveCardProps {
   drive: Drive;
   isActive: boolean;
+  isApplied: boolean;
   onSelect: (id: string) => void;
 }
 
@@ -64,7 +66,12 @@ const matchesTab = (drive: Drive, tab: DriveFilterTab): boolean => {
   }
 };
 
-const DriveCard = React.memo(({ drive, isActive, onSelect }: DriveCardProps) => (
+const extractErrorMessage = (err: unknown, fallback: string): string => {
+  const e = err as { response?: { data?: { message?: string } }; message?: string };
+  return e?.response?.data?.message || e?.message || fallback;
+};
+
+const DriveCard = React.memo(({ drive, isActive, isApplied, onSelect }: DriveCardProps) => (
   <button
     type="button"
     onClick={() => onSelect(drive._id)}
@@ -81,11 +88,16 @@ const DriveCard = React.memo(({ drive, isActive, onSelect }: DriveCardProps) => 
           {drive.companyName?.[0] || "C"}
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-base font-bold text-slate-900 truncate">{drive.companyName}</h3>
             {drive.workMode && (
               <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md uppercase shrink-0">
                 {drive.workMode}
+              </span>
+            )}
+            {isApplied && (
+              <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md uppercase shrink-0">
+                Applied
               </span>
             )}
           </div>
@@ -149,6 +161,13 @@ const PlacementDrivesView: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
 
+  const [applyingDriveId, setApplyingDriveId] = useState<string>("");
+  const [appliedDriveIds, setAppliedDriveIds] = useState<string[]>([]);
+  const [applyFeedback, setApplyFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
   const deferredQuery = useDeferredValue(searchQuery);
 
   useEffect(() => {
@@ -168,16 +187,20 @@ const PlacementDrivesView: React.FC = () => {
 
         const fetchedDrives = res.data || [];
         setDrives(fetchedDrives);
+
+        const preAppliedIds = fetchedDrives
+          .filter((d) => Boolean((d as Drive & { hasApplied?: boolean }).hasApplied))
+          .map((d) => d._id);
+        if (preAppliedIds.length > 0) {
+          setAppliedDriveIds(preAppliedIds);
+        }
+
         if (fetchedDrives.length > 0) {
           setSelectedDriveId(fetchedDrives[0]._id);
         }
       } catch (err: unknown) {
         if (isMounted) {
-          const message =
-            (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ||
-            (err as { message?: string })?.message ||
-            "Something went wrong while loading drives.";
-          setError(message);
+          setError(extractErrorMessage(err, "Something went wrong while loading drives."));
         }
       } finally {
         if (isMounted) {
@@ -186,12 +209,46 @@ const PlacementDrivesView: React.FC = () => {
       }
     };
 
-    fetchDrives();
+    void fetchDrives();
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  const handleApply = async (drive: Drive) => {
+    const alreadyApplied =
+      appliedDriveIds.includes(drive._id) ||
+      Boolean((drive as Drive & { hasApplied?: boolean }).hasApplied);
+
+    if (!drive.isEligible || alreadyApplied || applyingDriveId === drive._id) {
+      return;
+    }
+
+    setApplyFeedback(null);
+    setApplyingDriveId(drive._id);
+
+    try {
+      const res = await applyToDriveApi(drive._id);
+      if (!res.success) {
+        throw new Error(res.message || "Failed to submit application.");
+      }
+
+      setAppliedDriveIds((prev) => (prev.includes(drive._id) ? prev : [...prev, drive._id]));
+      setApplyFeedback({
+        type: "success",
+        message:
+          res.message || `Application submitted for ${drive.companyName} (${drive.roleTitle}).`,
+      });
+    } catch (err: unknown) {
+      setApplyFeedback({
+        type: "error",
+        message: extractErrorMessage(err, "Could not apply to this drive."),
+      });
+    } finally {
+      setApplyingDriveId("");
+    }
+  };
 
   const filteredDrives = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
@@ -228,7 +285,10 @@ const PlacementDrivesView: React.FC = () => {
     [drives.length, eligibleCount, notEligibleCount],
   );
 
-  const handleSelectDrive = useCallback((id: string) => setSelectedDriveId(id), []);
+  const handleSelectDrive = useCallback((id: string) => {
+    setSelectedDriveId(id);
+    setApplyFeedback(null);
+  }, []);
 
   if (loading) {
     return (
@@ -248,8 +308,11 @@ const PlacementDrivesView: React.FC = () => {
     );
   }
 
-  const resumeName = studentProfile?.resume?.publicId || (studentProfile?.resume?.url ? "Uploaded_Resume.pdf" : "No resume uploaded");
-  const isVerified = studentProfile?.academicVerification?.status === AcademicVerificationStatus.VERIFIED;
+  const resumeName =
+    studentProfile?.resume?.publicId ||
+    (studentProfile?.resume?.url ? "Uploaded_Resume.pdf" : "No resume uploaded");
+  const isVerified =
+    studentProfile?.academicVerification?.status === AcademicVerificationStatus.VERIFIED;
 
   return (
     <div className="flex flex-col gap-5 p-1 bg-[#f8f9ff] min-h-screen font-sans">
@@ -257,14 +320,19 @@ const PlacementDrivesView: React.FC = () => {
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            UNIVERSITY CAREER PORTAL {studentProfile?.graduationYear ? `• Cohort of ${studentProfile.graduationYear}` : ""}
+            UNIVERSITY CAREER PORTAL{" "}
+            {studentProfile?.graduationYear ? `• Cohort of ${studentProfile.graduationYear}` : ""}
           </span>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 mt-0.5">Campus Placement Drives</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 mt-0.5">
+            Campus Placement Drives
+          </h2>
         </div>
 
         <div className="flex bg-white border border-slate-200/80 shadow-xs justify-between items-center rounded-2xl px-4 py-2.5 gap-3">
           <div className="flex flex-col items-end">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Profile Clearance</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Profile Clearance
+            </p>
             <p className="text-xs font-bold text-emerald-700">
               Eligible for {eligibleCount} of {drives.length} Active Drives
             </p>
@@ -274,6 +342,33 @@ const PlacementDrivesView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Apply Feedback Banner */}
+      {applyFeedback && (
+        <div
+          className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center justify-between gap-3 ${
+            applyFeedback.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+              : "bg-rose-50 border-rose-200 text-rose-900"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {applyFeedback.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{applyFeedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setApplyFeedback(null)}
+            className="text-slate-500 hover:text-slate-800 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Search Bar & Filter Tabs */}
       <div className="flex flex-col gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
@@ -296,7 +391,9 @@ const PlacementDrivesView: React.FC = () => {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === tab.id ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                activeTab === tab.id
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700"
               }`}
             >
               {tab.label}
@@ -308,8 +405,12 @@ const PlacementDrivesView: React.FC = () => {
       {/* Empty State */}
       {filteredDrives.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center">
-          <p className="text-sm font-bold text-slate-700">No placement drives match your current filters.</p>
-          <p className="text-xs text-slate-400 mt-1">Try switching tabs or clearing the search query.</p>
+          <p className="text-sm font-bold text-slate-700">
+            No placement drives match your current filters.
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Try switching tabs or clearing the search query.
+          </p>
         </div>
       ) : (
         /* Main Split Body Layout */
@@ -317,21 +418,29 @@ const PlacementDrivesView: React.FC = () => {
           {/* Left Column: Active Drives List (40% width) */}
           <div className="w-full lg:w-[40%] flex flex-col gap-3 shrink-0">
             <div className="flex justify-between items-center px-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">ACTIVE RECRUITER PIPELINES</span>
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                ACTIVE RECRUITER PIPELINES
+              </span>
               <span className="text-xs font-bold text-blue-600">
                 Showing {filteredDrives.length} of {drives.length}
               </span>
             </div>
 
             <div className="flex flex-col gap-3">
-              {filteredDrives.map((drive) => (
-                <DriveCard
-                  key={drive._id}
-                  drive={drive}
-                  isActive={drive._id === activeDrive?._id}
-                  onSelect={handleSelectDrive}
-                />
-              ))}
+              {filteredDrives.map((drive) => {
+                const driveApplied =
+                  appliedDriveIds.includes(drive._id) ||
+                  Boolean((drive as Drive & { hasApplied?: boolean }).hasApplied);
+                return (
+                  <DriveCard
+                    key={drive._id}
+                    drive={drive}
+                    isActive={drive._id === activeDrive?._id}
+                    isApplied={driveApplied}
+                    onSelect={handleSelectDrive}
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -356,8 +465,12 @@ const PlacementDrivesView: React.FC = () => {
                 </div>
 
                 <div className="text-right">
-                  <span className="text-2xl font-black text-blue-700">₹{activeDrive.ctcTotal} LPA</span>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase">{activeDrive.jobType}</p>
+                  <span className="text-2xl font-black text-blue-700">
+                    ₹{activeDrive.ctcTotal} LPA
+                  </span>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase">
+                    {activeDrive.jobType}
+                  </p>
                 </div>
               </div>
 
@@ -377,52 +490,93 @@ const PlacementDrivesView: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={!activeDrive.isEligible}
-                  className={`w-full sm:w-auto text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 ${
-                    activeDrive.isEligible
-                      ? "bg-[#2563eb] hover:bg-blue-700 text-white cursor-pointer"
-                      : "bg-slate-200 text-slate-500 cursor-not-allowed"
-                  }`}
-                >
-                  {activeDrive.isEligible ? (
-                    <>
-                      Apply Now <ChevronRight className="w-4 h-4" />
-                    </>
-                  ) : (
-                    "Criteria Not Met"
-                  )}
-                </button>
+                {(() => {
+                  const isAlreadyApplied =
+                    appliedDriveIds.includes(activeDrive._id) ||
+                    Boolean((activeDrive as Drive & { hasApplied?: boolean }).hasApplied);
+                  const isSubmitting = applyingDriveId === activeDrive._id;
+                  const isDisabled = !activeDrive.isEligible || isAlreadyApplied || isSubmitting;
+
+                  return (
+                    <button
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => void handleApply(activeDrive)}
+                      className={`w-full sm:w-auto text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 ${
+                        isAlreadyApplied
+                          ? "bg-emerald-600 text-white cursor-default"
+                          : activeDrive.isEligible
+                            ? "bg-[#2563eb] hover:bg-blue-700 disabled:opacity-60 text-white cursor-pointer"
+                            : "bg-slate-200 text-slate-500 cursor-not-allowed"
+                      }`}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" /> Applying...
+                        </>
+                      ) : isAlreadyApplied ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> Applied
+                        </>
+                      ) : activeDrive.isEligible ? (
+                        <>
+                          Apply Now <ChevronRight className="w-4 h-4" />
+                        </>
+                      ) : (
+                        "Criteria Not Met"
+                      )}
+                    </button>
+                  );
+                })()}
               </div>
 
               {/* Drive Key Metadata */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/80 border border-slate-100 p-4 rounded-2xl">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Total CTC</span>
-                  <span className="text-sm font-black text-slate-900 mt-1 block">₹{activeDrive.ctcTotal} LPA</span>
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                    Total CTC
+                  </span>
+                  <span className="text-sm font-black text-slate-900 mt-1 block">
+                    ₹{activeDrive.ctcTotal} LPA
+                  </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Work Mode</span>
-                  <span className="text-sm font-black text-slate-900 mt-1 block">{activeDrive.workMode || "On-Site"}</span>
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                    Work Mode
+                  </span>
+                  <span className="text-sm font-black text-slate-900 mt-1 block">
+                    {activeDrive.workMode || "On-Site"}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 block uppercase">Shift Timings</span>
-                  <span className="text-sm font-black text-slate-900 mt-1 block">{activeDrive.shiftTimings || "Standard Day"}</span>
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                    Shift Timings
+                  </span>
+                  <span className="text-sm font-black text-slate-900 mt-1 block">
+                    {activeDrive.shiftTimings || "Standard Day"}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-red-500 block uppercase">Apply By</span>
-                  <span className="text-sm font-black text-red-600 mt-1 block">{formatDate(activeDrive.registrationDeadline)}</span>
+                  <span className="text-[10px] font-bold text-red-500 block uppercase">
+                    Apply By
+                  </span>
+                  <span className="text-sm font-black text-red-600 mt-1 block">
+                    {formatDate(activeDrive.registrationDeadline)}
+                  </span>
                 </div>
               </div>
 
               {/* TPO Official Eligibility Clearance */}
               <div>
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">TPO OFFICIAL ELIGIBILITY CLEARANCE</h4>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    TPO OFFICIAL ELIGIBILITY CLEARANCE
+                  </h4>
                   <span
                     className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${
-                      activeDrive.isEligible ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                      activeDrive.isEligible
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-rose-100 text-rose-800"
                     }`}
                   >
                     {activeDrive.isEligible ? "ELIGIBLE" : "NOT ELIGIBLE"}
@@ -441,7 +595,9 @@ const PlacementDrivesView: React.FC = () => {
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Required: ≥ {activeDrive.eligibilityCriteria?.minCgpa ?? 0}{" "}
                         {studentProfile?.cgpa !== undefined && (
-                          <span className="font-bold text-slate-700">• Yours: {studentProfile.cgpa}</span>
+                          <span className="font-bold text-slate-700">
+                            • Yours: {studentProfile.cgpa}
+                          </span>
                         )}
                       </p>
                     </div>
@@ -458,20 +614,23 @@ const PlacementDrivesView: React.FC = () => {
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Max Allowed: {activeDrive.eligibilityCriteria?.maxBacklogsAllowed ?? 0}
                         {studentProfile?.backlogCount !== undefined && (
-                          <span className="font-bold text-slate-700"> • Yours: {studentProfile.backlogCount}</span>
+                          <span className="font-bold text-slate-700">
+                            • Yours: {studentProfile.backlogCount}
+                          </span>
                         )}
                       </p>
                     </div>
                   </div>
 
                   <div className="bg-slate-50/80 border border-slate-100 p-3 rounded-xl flex items-start gap-2.5">
-                    {activeDrive.eligibilityChecks?.courseMet && activeDrive.eligibilityChecks?.fieldMet ? (
+                    {activeDrive.eligibilityChecks?.courseMet &&
+                    activeDrive.eligibilityChecks?.fieldMet ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     ) : (
                       <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                     )}
                     <div>
-                      <p className="text-xs font-bold text-slate-800">Course & Stream</p>
+                      <p className="text-xs font-bold text-slate-800">Course &amp; Stream</p>
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Allowed:{" "}
                         {[
@@ -493,7 +652,9 @@ const PlacementDrivesView: React.FC = () => {
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Eligible up to Batch {activeDrive.batchYear}
                         {studentProfile?.graduationYear && (
-                          <span className="font-bold text-slate-700"> • Yours: {studentProfile.graduationYear}</span>
+                          <span className="font-bold text-slate-700">
+                            • Yours: {studentProfile.graduationYear}
+                          </span>
                         )}
                       </p>
                     </div>
@@ -504,7 +665,9 @@ const PlacementDrivesView: React.FC = () => {
               {/* Skill Match Analysis */}
               <div>
                 <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">SKILL MATCH ANALYSIS</h4>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    SKILL MATCH ANALYSIS
+                  </h4>
                   <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                     {activeDrive.skillMatchPercent ?? 100}% Profile Fit
                   </span>
@@ -530,7 +693,9 @@ const PlacementDrivesView: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500">No specific technical skills listed for this drive.</p>
+                  <p className="text-xs text-slate-500">
+                    No specific technical skills listed for this drive.
+                  </p>
                 )}
               </div>
 
@@ -539,7 +704,9 @@ const PlacementDrivesView: React.FC = () => {
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Briefcase className="w-3.5 h-3.5" /> ROLE DESCRIPTION
                 </h4>
-                <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{activeDrive.description}</p>
+                <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                  {activeDrive.description}
+                </p>
               </div>
             </div>
           )}

@@ -31,7 +31,7 @@ export const appRoutes: RouteObject[] = [
     ],
   },
 
-  // 2. PROTECTED STUDENT ROUTES
+  // 2. PROTECTED STUDENT ROUTES,
   {
     element: <ProtectedRoute allowedRoles={[UserRole.STUDENT]} />,
     children: [
